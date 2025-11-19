@@ -15,10 +15,17 @@ ASSIGN
 	TRUE: state;
 	esac;
 	next(counter) := case
-		(counter < 10) : counter +1;
-		(state = raised) & (traffic_state = red) & (counter = 5) : 0;
-		(state = {lowered, raised}) & (counter = 10) : 0;
-	TRUE : counter;
+		state = rised & traffic_state = red :
+			case
+				counter < 10 : counter + 1;
+				TRUE : counter;
+			esac;
+		state = lowing | state = rising : 
+			case
+				counter < 10 : counter + 1;
+				TRUE : 0;
+			esac;
+		TRUE : 0;
 	esac;
 
 -- Traffic light module
@@ -59,3 +66,17 @@ VAR
 	traffic_light: process traffic_light(train.state, barrier.state, emergency);
 	barrier: process barrier(traffic_light.state, train.state, emergency);
 	train: process train(barrier.state, emergency);
+
+-- Security
+LTLSPEC G!(train.state = passing & barrier.state != down)
+CTLSPEC AG(barrier.state != rised -> traffic.state = red)
+
+-- Liveness
+LTLSPEC G(train.state = approaching -> F barrier.state = down)
+LTLSPEC G((train.state = absent & barrier.state = down) -> F barrier.state = rised)
+
+-- Emergency 
+CTLSPEC AG(emergency -> AX(traffic.state = red & barrier.state = lowing))
+
+-- Dead Lock
+CTLSPEC AG EX TRUE
