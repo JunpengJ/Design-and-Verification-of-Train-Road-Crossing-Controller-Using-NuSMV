@@ -20,7 +20,7 @@ ASSIGN
 				counter < 10 : counter + 1;
 				TRUE : counter;
 			esac;
-		state = lowing | state = rising : 
+		state = lowering | state = rising : 
 			case
 				counter < 10 : counter + 1;
 				TRUE : 0;
