@@ -7,18 +7,20 @@ ASSIGN
 	init(state) := raised;
 	init(move_timer) := 0;
 	next(state) := case
-		emergency : lowering;
-		(state = raised) & (traffic_state = red) & (red_timer >= 5) : lowering;
 		(state = lowering) & (move_timer >= 10) : lowered;
-		(state = lowered) & (train_state = absent) & (traffic_state = red) : raising;
+		emergency & ((state = raised) | (state = raising)) : lowering;
 		(state = raising) & (move_timer >= 10) : raised;
+		emergency & (state != lowered) & (state != lowering) : lowering;
+		!emergency & (state = lowered) & (train_state = absent) & (traffic_state = red) : raising;
+		!emergency & (state = raised) & (traffic_state = red) & (red_timer >= 5) : lowering;
 		TRUE: state;
 	esac;
 	next(move_timer) := case
-		emergency & state != lowering : 1;
+		((emergency & (state != lowered) & (state != lowering)) | 
+		(!emergency & (state = raised) & (traffic_state = red) & (red_timer >= 5))) :1;
+		!emergency & (state = lowered) & (train_state = absent) & (traffic_state = red) : 1;
 		(state = lowering | state = raising) & (move_timer < 10) : move_timer + 1;
-		state = raised | state = lowered : 0;
-		next(state) != state : 0;
+		(state = raised | state = lowered) & (next(state) = state): 0;
 		TRUE : move_timer;
 	esac;
 
@@ -52,14 +54,12 @@ VAR
 ASSIGN
 	init(state) := absent;
 	next(state) := case
-		emergency : approaching; -- In emergency, set train to approaching to simulate imitate S3 in program graph 
+		emergency : {absent, approaching}; -- In emergency, set train to approaching to simulate imitate S3 in program graph 
 		state = absent : {absent, approaching};
 		(state = approaching) & (barrier_state = lowered) & !emergency : passing;
 		state = passing : {passing, absent} ;
 		TRUE : state;
 	esac;
-
-	INVAR (emergency -> state != passing);
 
 -- Main module
 MODULE main
@@ -68,10 +68,24 @@ VAR
 	traffic_light: process traffic_light(train.state, barrier.state, emergency);
 	barrier: process barrier(traffic_light.state, train.state, emergency, traffic_light.red_timer);
 	train: process train(barrier.state, emergency);
-	emergency_button: boolean;
+	emergency_locked: boolean;
 ASSIGN
 	init(emergency) := FALSE;
-	next(emergency) := {FALSE, TRUE};
+	init(emergency_locked) := FALSE;
+
+	next(emergency_locked) := case
+		emergency & (barrier.state != lowering) & (barrier.state != lowered) & (next(barrier.state) = lowering) : TRUE;
+		(barrier.state = lowering) & (barrier.move_timer >= 10) & (next(barrier.state) = lowered) : FALSE;
+		!emergency : FALSE;
+		TRUE : emergency_locked;
+	esac;
+	next(emergency) := case
+		emergency_locked : TRUE;
+		TRUE : {FALSE, TRUE};
+	esac;
+
+	INVAR (train.state = passing -> barrier.state = lowered);
+	INVAR (emergency -> traffic_light.state = red);
 
 	FAIRNESS running;
 	FAIRNESS traffic_light.running;
@@ -82,18 +96,20 @@ ASSIGN
 -- Security
 LTLSPEC G!(train.state = passing & barrier.state != lowered)
 LTLSPEC G(barrier.state = raised -> X train.state != passing)
-
+LTLSPEC G(emergency -> F(!emergency))
 --CTLSPEC AG((barrier.state != raised & barrier.state != lowering & barrier.state != raising & !emergency) -> traffic_light.state = red)
 --CTLSPEC AG((barrier.state = lowering & !emergency) -> traffic_light.red_timer >= 5)
 
-LTLSPEC G(emergency -> F(!emergency))
-
 -- Liveness
-LTLSPEC G((train.state = approaching & !emergency) -> F barrier.state = lowered)
+LTLSPEC G((train.state = approaching & !emergency & traffic_light.state = red & traffic_light.red_timer >= 5) -> F barrier.state = lowered)
+LTLSPEC G((barrier.state = lowering & barrier.move_timer > 0) -> (barrier.state = lowering U barrier.state = lowered))
 --LTLSPEC G((train.state = absent & barrier.state = lowered & !emergency & traffic_light.state = red) -> F barrier.state = raised)
 
 -- Emergency 
-CTLSPEC AG(emergency -> (AF traffic_light.state = red & AF barrier.state = lowering))
+CTLSPEC AG(emergency -> AF traffic_light.state = red)
+CTLSPEC AG(emergency -> AF barrier.state = lowered)
+CTLSPEC EF(barrier.state = raising & emergency & AX barrier.state = lowering)
+LTLSPEC G((emergency & barrier.state = lowering) -> (emergency U barrier.state = lowered))
 
 -- Dead Lock
 CTLSPEC AG EX TRUE
