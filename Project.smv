@@ -15,7 +15,7 @@ ASSIGN
 	TRUE: state;
 	esac;
 	next(counter) := case
-		state = rised & traffic_state = red :
+		state = raised & traffic_state = red :
 			case
 				counter < 10 : counter + 1;
 				TRUE : counter;
