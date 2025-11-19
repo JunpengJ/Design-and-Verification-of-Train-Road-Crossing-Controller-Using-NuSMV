@@ -1,0 +1,61 @@
+-- Barrier module
+MODULE barrier(traffic_state, train_state, emergency)
+VAR
+	state:{raising, raised, lowering, lowered};
+	counter: 0..10;
+ASSIGN
+	init(state) := raised;
+	init(counter) := 0;
+	next(state) := case
+		emergency : lowering;
+		(state = raised) & (traffic_state = red) & (counter = 5) : lowering;
+		(state = lowering) & (counter = 10) : lowered;
+		(state = lowered) & (train_state = absent) & (traffic_state = red) : raising;
+		(state = raising) & (counter = 10) : raised;
+	TRUE: state;
+	esac;
+	next(counter) := case
+		(counter < 10) : counter +1;
+		(state = raised) & (traffic_state = red) & (counter = 5) : 0;
+		(state = {lowered, raised}) & (counter = 10) : 0;
+	TRUE : counter;
+	esac;
+
+-- Traffic light module
+MODULE traffic_light(train_state, barrier_state, emergency)
+VAR
+	state:{green, yellow, red};
+ASSIGN
+	init(state) := green;
+	next(state) := case
+		emergency : red;
+		(state = green) & (train_state = absent) : green;
+		(state = green) & (train_state = approaching) : yellow;
+		(state = yellow) : red;
+		(state = red) & (train_state = passing) : red;
+		(state = red) & (train_state = absent) & (barrier_state = raised) : green;
+	TRUE: state;
+	esac;
+
+-- Train module
+MODULE train(barrier_state, emergency)
+VAR
+	state: {approaching, passing, absent};
+ASSIGN
+	init(state) := absent;
+	next(state) := case
+		emergency : approaching; -- In emergency, set train to approaching to simulate imitate S3 in program graph
+		state = absent : {absent, approaching};
+		state = approaching : approaching;
+		(state = approaching) & (barrier_state = lowered) : passing;
+		state = passing : {passing, absent} ;
+	TRUE : state;
+	esac;
+
+-- Main module
+MODULE main
+VAR
+	emergency : boolean;
+	traffic_light: process traffic_light(train.state, barrier.state, emergency);
+	barrier: process barrier(traffic_light.state, train.state, emergency);
+	train: process train(barrier.state, emergency);
