@@ -81,7 +81,8 @@ ASSIGN
 	-- Initial state of the train is absent
 	init(state) := absent;
 	next(state) := case
-		emergency : approaching; -- In emergency, set train to approaching to simulate imitate S3 in program graph 
+		-- In emergency, set train to approaching to simulate imitate S3 in program graph 
+		emergency : approaching; 
 		state = absent : {absent, approaching};
 		-- Train starts passing when barrier is lowered and no emergency
 		(state = approaching) & (barrier_state = lowered) & !emergency : passing;
@@ -158,7 +159,7 @@ CTLSPEC AG(emergency -> AF barrier.state = lowered)
 CTLSPEC EF(barrier.state = raising & emergency & AF barrier.state = lowering)
 LTLSPEC G(emergency -> F (!emergency & barrier.state = lowered))
 
--- Constraint validation
+-- Constraint validation for barrier lowering after red light 5 seconds
 CTLSPEC AG(barrier.state != raised & !emergency & traffic_light.state = red & 
 traffic_light.red_timer >= 5) -> AX(barrier.state = lowering)
 
