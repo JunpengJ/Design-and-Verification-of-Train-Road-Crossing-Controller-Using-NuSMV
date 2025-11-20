@@ -145,6 +145,8 @@ ASSIGN
 LTLSPEC G!(train.state = passing & barrier.state != lowered)
 LTLSPEC G(barrier.state = raised -> X train.state != passing)
 LTLSPEC G(emergency -> F(!emergency))
+LTLSPEC G(barrier.state != raised -> traffic_light.state = red)
+LTLSPEC G(train.state = passing -> barrier.state = lowered)
 
 -- Liveness properties
 LTLSPEC G((train.state = approaching & !emergency & traffic_light.state = red & traffic_light.red_timer >= 5) -> F barrier.state = lowered)
@@ -155,6 +157,10 @@ CTLSPEC AG(emergency -> AF traffic_light.state = red)
 CTLSPEC AG(emergency -> AF barrier.state = lowered)
 CTLSPEC EF(barrier.state = raising & emergency & AF barrier.state = lowering)
 LTLSPEC G(emergency -> F (!emergency & barrier.state = lowered))
+
+-- Constraint validation
+CTLSPEC AG(barrier.state != raised & !emergency & traffic_light.state = red & 
+traffic_light.red_timer >= 5) -> AX(barrier.state = lowering)
 
 -- Deadlock detection
 CTLSPEC AG EX TRUE
