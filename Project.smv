@@ -142,26 +142,34 @@ ASSIGN
 	FAIRNESS barrier.running;
 	FAIRNESS train.running;
 
--- Security properties
-LTLSPEC G!(train.state = passing & barrier.state != lowered)
-LTLSPEC G(barrier.state = raised -> X train.state != passing)
-LTLSPEC G(emergency -> F(!emergency))
-LTLSPEC G(barrier.state != raised -> traffic_light.state = red)
-LTLSPEC G(train.state = passing -> barrier.state = lowered)
 
--- Liveness properties
-LTLSPEC G((train.state = approaching & !emergency & traffic_light.state = red & traffic_light.red_timer >= 5) -> F barrier.state = lowered)
-LTLSPEC G((barrier.state = lowering & barrier.move_timer > 0) -> (barrier.state = lowering U barrier.state = lowered))
-
--- Emergency properties
-CTLSPEC AG(emergency -> AF traffic_light.state = red)
-CTLSPEC AG(emergency -> AF barrier.state = lowered)
-CTLSPEC EF(barrier.state = raising & emergency & AF barrier.state = lowering)
-LTLSPEC G(emergency -> F (!emergency & barrier.state = lowered))
-
--- Constraint validation for barrier lowering after red light 5 seconds
-CTLSPEC AG(barrier.state != raised & !emergency & traffic_light.state = red & 
-traffic_light.red_timer >= 5) -> AX(barrier.state = lowering)
-
--- Deadlock detection
+-- SAFETY PROPERTIES
+-- Train never passes with barrier not lowered
+LTLSPEC G !(train.state = passing & barrier.state != lowered)
+-- Raised barrier now implies train not passing next step
+LTLSPEC G (barrier.state = raised -> X train.state != passing)
+-- Barrier not raised implies light is red
+LTLSPEC G (barrier.state != raised -> traffic_light.state = red)
+-- Passing train always has barrier lowered
+LTLSPEC G (train.state = passing -> barrier.state = lowered)
+-- Barrier lowering must follow 5 step red delay
+CTLSPEC AG (barrier.state != raised & !emergency & traffic_light.state = red & traffic_light.red_timer >= 5) -> AX (barrier.state = lowering)
+-- Model is deadlock free
 CTLSPEC AG EX TRUE
+
+
+-- LIVENESS PROPERTIES
+-- Emergency will eventually clear
+LTLSPEC G (emergency -> F (!emergency))
+-- If train is approaching and red has held 5 steps, barrier eventually lowers
+LTLSPEC G ((train.state = approaching & !emergency & traffic_light.state = red & traffic_light.red_timer >= 5) -> F (barrier.state = lowered))
+-- Once lowering starts, barrier keeps lowering until lowered
+LTLSPEC G ((barrier.state = lowering & barrier.move_timer > 0) -> (barrier.state = lowering U barrier.state = lowered))
+-- Under emergency, light eventually red on all paths
+CTLSPEC AG (emergency -> AF (traffic_light.state = red))
+-- Under emergency, barrier eventually lowered on all paths
+CTLSPEC AG (emergency -> AF (barrier.state = lowered))
+-- There exists a path from raising in emergency that leads to lowering
+CTLSPEC EF (barrier.state = raising & emergency & AF (barrier.state = lowering))
+-- Emergency eventually clears in a safe lowered state
+LTLSPEC G (emergency -> F (!emergency & barrier.state = lowered))
